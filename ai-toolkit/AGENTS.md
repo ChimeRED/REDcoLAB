@@ -11,13 +11,42 @@
 - 项目类型：Windows 桌面绘画软件 **CLIP STUDIO PAINT (CSP) 5.0 EX** 的原生滤镜插件。
 - 主要语言：**C++17**（插件本体）+ **PowerShell 5.1**（构建/安装/验证脚本）+ **Python 3**（测试与客观校验）。
 - 主要框架：**CELSYS Triglav Plug-In SDK**（官方滤镜插件 SDK）。
-- 产物格式：`.cpm`（社区惯例）/ `.dll`（Celsys 自带滤镜的格式）。**两者由同一份源码产出，用于实测哪种能被 CSP 加载。**
+- 产物格式：**`.dll`**（已确证为 CSP 实际加载的格式）。`.cpm` 为社区惯例，**未被确认可用**，仅作附带产出。
 - 构建入口：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\build.ps1`
 - 安装入口：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\install_plugin.ps1`
 - 测试入口：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_tests.ps1`
 - 归档入口：`powershell -NoProfile -ExecutionPolicy Bypass -File tools\archive.ps1`（**推送前必须用户确认**）
 
 ## 2. 能力边界（本项目的根本约束，任何改动不得违反）
+
+### 2.0 已确证的安装位置（真机验证通过，2026-10-16）
+
+**插件安装到 CSP 程序目录，扩展名用 `.dll`：**
+
+```
+C:\build\csp\CLIP STUDIO 1.5\CLIP STUDIO PAINT\PlugIn\PAINT\
+```
+
+即 **Celsys 自带 40 个滤镜 DLL 所在的同一目录**。
+
+真机证据（`docs/evidence/realmachine-product-load.log`）：
+
+```
+[init] hostVersion=6 (apiResult=0) required=1
+[init] module registered, version=1.0.0, moduleKind=0x4380
+[filterInit] registered filter, targets=RGB/Gray/Binarization, version=1.0.0
+```
+
+- 真实 CSP 5.0.4 的**宿主版本是 6**（模拟宿主固定为 1，可据此区分真假）
+- `moduleKind = kTriglavPlugInModuleKindFilter (0x4380)` **被接受**
+- CSP 会**加载插件两次**：第一次只做模块初始化后立即终止，第二次才注册滤镜
+- **用户数据目录（`%APPDATA%\CELSYSUserData\...`）不是加载点**，不再作为候选
+
+**取证教训（重要）**：CSP 进程会继承启动者的 `TEMP` 环境变量。
+在 DSH 会话中启动 CSP 时，`TEMP` 指向沙箱私有目录，日志会写进那里而不是真实用户 `%TEMP%`。
+**判断「是否加载」必须扫描所有可能的 TEMP 位置**，否则会得出错误的否定结论（本项目曾因此误判三轮）。
+
+### 2.1 能力边界
 
 官方 SDK **只允许开发滤镜插件**。经真实 SDK 头文件核实（`sdk_official/TriglavPlugInRecord.h` 的 `TriglavPlugInRecordSuite`），插件可用的全部能力仅为：
 
@@ -35,7 +64,7 @@
 - 常驻面板 / 停靠面板
 - 插件注册全局快捷键
 
-### 2.1 被否决的功能（不得复活）
+### 2.2 被否决的功能（不得复活）
 
 | 功能 | 状态 | 依据 |
 |---|---|---|

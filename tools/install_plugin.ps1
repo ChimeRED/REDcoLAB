@@ -79,16 +79,20 @@ $cspProgramPlugIn = 'C:\build\csp\CLIP STUDIO 1.5\CLIP STUDIO PAINT\PlugIn\PAINT
 
 $candidates = @(
     @{
+        Path = $cspProgramPlugIn
+        Note = 'CONFIRMED WORKING (2026-10-16): CSP loads .dll from here. Recommended.'
+    },
+    @{
         Path = Join-Path $appData 'CELSYSUserData\CELSYS\CLIPStudioPlugIn\PAINT'
-        Note = 'exists on this machine (empty); CSP creates it itself'
+        Note = 'unconfirmed; earlier test was invalidated by a TEMP-path mistake'
     },
     @{
         Path = Join-Path $appData 'CELSYSUserData\CELSYS\CLIPStudioModule\PlugIn\PAINT\win'
-        Note = 'used by the previous attempt; kept because it may still be valid'
+        Note = 'unconfirmed; used by the previous attempt'
     },
     @{
         Path = Join-Path $appData 'CELSYSUserData\CELSYS\CLIPStudioModule\PlugIn\PAINT'
-        Note = 'same tree without the win subfolder'
+        Note = 'unconfirmed; same tree without the win subfolder'
     },
     @{
         Path = Join-Path $documents 'CELSYS\CLIPStudioModule\Plugin\PAINT'
@@ -97,10 +101,6 @@ $candidates = @(
     @{
         Path = Join-Path $documents 'CELSYS\CLIPStudioPlugIn\PAINT'
         Note = 'documented location, alternate spelling'
-    },
-    @{
-        Path = $cspProgramPlugIn
-        Note = 'CSP program folder; where Celsys own filters live (needs admin)'
     }
 )
 

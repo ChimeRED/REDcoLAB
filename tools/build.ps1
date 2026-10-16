@@ -18,7 +18,11 @@ param(
     [switch]$KeepStage,
     # Build the diagnostic probe instead of the product. The probe always logs,
     # never modifies pixels, and exists to produce evidence from a real CSP run.
-    [switch]$Probe
+    [switch]$Probe,
+    # Build the module-kind probe: decides at runtime which module kind to
+    # declare, via the REDCOLAB_KIND environment variable. Used to find out
+    # which kind CLIP STUDIO PAINT accepts.
+    [switch]$KindProbe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -129,7 +133,13 @@ $commonArgs = @(
 )
 
 # Each build target: output file name -> source file.
-if ($Probe) {
+if ($KindProbe) {
+    $kindSource = Join-Path $srcDir 'probe\REDcoLAB_kindprobe.cpp'
+    if (-not (Test-Path -LiteralPath $kindSource)) { Fail "missing $kindSource" }
+    $targets = @{ 'REDcoLAB_kindprobe.dll' = $kindSource }
+    Write-Host "build target  : MODULE-KIND PROBE (diagnostic, never modifies pixels)"
+}
+elseif ($Probe) {
     $probeSource = Join-Path $srcDir 'probe\REDcoLAB_probe.cpp'
     if (-not (Test-Path -LiteralPath $probeSource)) { Fail "missing $probeSource" }
     $targets = @{ 'REDcoLAB_probe.dll' = $probeSource }
@@ -188,7 +198,16 @@ foreach ($out in $built) {
 }
 
 Write-Host ""
-if ($Probe) {
+if ($KindProbe) {
+    Write-Host "MODULE-KIND PROBE BUILD OK - dist\REDcoLAB_kindprobe.dll"
+    Write-Host ""
+    Write-Host "Logs to %TEMP%\REDcoLAB_kindprobe.log (always)."
+    Write-Host "Declared module kind is chosen by the REDCOLAB_KIND environment variable:"
+    Write-Host "  0x4380 (default) = Filter"
+    Write-Host "  5530             = FilterActivation"
+    Write-Host "  0                = do not call setModuleKind at all"
+}
+elseif ($Probe) {
     Write-Host "PROBE BUILD OK - dist\REDcoLAB_probe.dll"
     Write-Host ""
     Write-Host "The probe always logs to %TEMP%\REDcoLAB_probe.log and never changes pixels."

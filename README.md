@@ -38,31 +38,44 @@ moduleInitialize / filterInitialize / filterRun 三组。详见 [已知限制与
 
 ---
 
-## 当前唯一的关键未知
+## 安装位置（已真机确证）
 
-**CSP 5.0.4 到底从哪个目录、用哪种扩展名加载第三方滤镜插件 —— 仍未打通。**
+**CSP 5.0.4 会从 CSP 程序目录加载第三方滤镜插件，扩展名用 `.dll`：**
 
-经过**两次真实 CSP 启动**的实测，两个最可能的候选位置**都未被加载**：
+```
+C:\build\csp\CLIP STUDIO 1.5\CLIP STUDIO PAINT\PlugIn\PAINT\
+```
 
-| 位置 | CSP 启动 | 探针日志 | 判定 |
-|---|---|---|---|
-| `%APPDATA%\...\CELSYS\CLIPStudioPlugIn\PAINT` | 13:11:49 | 无 | **未被加载** |
-| CSP 程序目录 `PlugIn\PAINT`（自带 40 个滤镜同处） | 13:15:05 | 无 | **未被加载** |
+即 **Celsys 自带 40 个滤镜 DLL 所在的同一个目录**。
 
-判定依据：探针在 `DllMain` 的 `DLL_PROCESS_ATTACH` 就**无条件**写日志——
-**DLL 被映射进进程就必然产生日志**，不需要宿主调用入口点。没有日志 = CSP 没打开该文件。
+真机证据（[evidence/realmachine-product-load.log](docs/evidence/realmachine-product-load.log)）：
 
-**这意味着光靠「把文件放进目录」无法让 CSP 5.0.4 加载第三方滤镜插件。**
-这同时解释了旧版 v0.1.6 的失败：它的安装位置同属「用户数据目录」一类，
-「装了没用」不是代码问题，而是安装方式在该 CSP 上不成立。
+```
+[init] hostVersion=6 (apiResult=0) required=1
+[init] module registered, version=1.0.0, moduleKind=0x4380
+[filterInit] registered filter, targets=RGB/Gray/Binarization, version=1.0.0
+```
 
-**完整证据、确定性范围、与官方资料的张力、以及下一步路径**：
-见 [真机取证结论](docs/真机取证结论.md) 与 [安装位置验证](docs/安装位置验证.md)。
+`hostVersion=6` 是真机的标志（模拟宿主固定为 1），`filterInit registered filter`
+证明 **CSP 接受了滤镜注册**。
 
-### 待判定：三种扩展名
+安装：
 
-探针已以 `.dll` / `.cfpi` / `.cpm` 三种扩展名同时放在 CSP 程序目录，
-一次**完全退出后重启**即可判定扩展名是否影响加载。这一步尚未执行。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\install_plugin.ps1 -Only 1 -Execute
+```
+
+然后**完全退出并重启** CSP，在 `滤镜` 菜单中查找 `红红子LAB → 一键灰度`。
+
+> ⚠️ `REDcoLAB.dll` 与 Celsys 自带滤镜同处一个目录。它**不修改 CSP 任何原有文件**，
+> 删除该文件即卸载。**CSP 升级或修复安装可能移除它**，升级后需重新安装。
+> 写入该目录通常**需要管理员权限**。
+
+### 仍需人工确认
+
+宿主已加载并注册了滤镜（日志确证）。以下需要打开 CSP 界面才能确认：
+菜单文案是否正确显示、参数面板与实时预览、执行后画面真的变灰、Ctrl+Z 可撤销、
+以及矢量/文字/文件夹图层不出现在可执行范围里。
 
 ---
 

@@ -1,5 +1,51 @@
 # REDcoLAB 变更记录
 
+## 1.0.0 修正 5：真机加载成功 —— 撤回此前的错误否定结论（2026-10-16）
+
+### 结果
+
+**插件已被 CSP 5.0.4 成功加载并完成滤镜注册。**
+
+```
+[init] hostVersion=6 (apiResult=0) required=1
+[init] module registered, version=1.0.0, moduleKind=0x4380
+[filterInit] registered filter, targets=RGB/Gray/Binarization, version=1.0.0
+```
+
+- 安装位置：**CSP 程序目录 `...\CLIP STUDIO PAINT\PlugIn\PAINT\`**，扩展名 `.dll`
+- 真实宿主版本：**6**；`moduleKind = Filter(0x4380)` **被接受**
+- CSP 会**加载插件两次**（第一次仅模块初始化后终止，第二次才注册滤镜）
+- 证据留存：`docs/evidence/realmachine-product-load.log`
+
+### ⚠️ 撤回错误结论
+
+前一轮我曾判定「两个候选位置均未被加载」「手动放文件在 5.0.4 上不成立」——
+**这些结论是错的，现已撤回。**
+
+根因：**CSP 进程继承了启动者的 `TEMP` 环境变量**。在 DSH 会话中启动 CSP 时 `TEMP` 指向
+沙箱私有目录，探针日志被写进那里，而我一直检查真实用户 `%TEMP%`，因此看不到日志，
+误判为「未被加载」。更早发现的那份 38019 字节日志里其实混有真机记录，
+我按段统计时判断标准不够严而整体当成了模拟宿主输出。
+
+**方法论教训已写入 `ai-toolkit/AGENTS.md`**：不得假定 `%TEMP%` 是宿主实际使用的目录；
+判定加载必须扫描所有可能的 TEMP 位置；优先采用宿主无法伪造的判据（如 `hostVersion=6`）。
+
+### 变更
+
+- `ai-toolkit/AGENTS.md`：新增 §2.0「已确证的安装位置」与取证教训；产物格式明确为 `.dll`
+- `tools/install_plugin.ps1`：候选顺序调整，**程序目录升为第 1 位并标注已确证**，
+  其余位置标注「未确认」并说明早前测试无效
+- `docs/安装位置验证.md`：改写为正向最终结论
+- `docs/真机取证结论.md`：加入更正章节，明示撤回
+- `README.md`：安装位置更新为已确证结论
+- 新增 `src/probe/REDcoLAB_kindprobe.cpp` + `tools/build.ps1 -KindProbe`：
+  运行时按环境变量 `REDCOLAB_KIND` 选择声明的模块种类，用于确证 `0x4380` 被接受
+
+### 仍需人工确认
+
+菜单文案显示、参数面板与实时预览、执行后画面变灰、Ctrl+Z 撤销、
+以及矢量/文字/文件夹图层不出现在可执行范围内。这些需要打开 CSP 界面操作。
+
 ## 1.0.0 修正 4：真机取证结论定稿（2026-10-16）
 
 两次真实 CSP 启动的取证结果：**两个最可能的候选位置均未被加载**。
