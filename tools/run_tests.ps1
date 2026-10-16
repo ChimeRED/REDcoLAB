@@ -104,6 +104,21 @@ if (Test-Path -LiteralPath $matrixTarget) {
     Write-Host ""
 }
 
+# Diagnostic probe: when present, it must complete the lifecycle and must leave
+# every pixel untouched (it is a measurement instrument, not a filter).
+$probeTarget = Join-Path $distDir 'REDcoLAB_probe.dll'
+if (Test-Path -LiteralPath $probeTarget) {
+    Write-Host "--- diagnostic probe: lifecycle + pixels-untouched assertion ---"
+    & $Python $mockHost $probeTarget --expect-untouched --quiet
+    if ($LASTEXITCODE -ne 0) { Fail "probe modified pixels or failed its lifecycle" }
+    Write-Host "  -> PASS" -ForegroundColor Green
+
+    & $Python $mockHost $probeTarget --minimal --expect-untouched --quiet
+    if ($LASTEXITCODE -ne 0) { Fail "probe failed under the minimal host contract" }
+    Write-Host "  -> PASS (minimal host)" -ForegroundColor Green
+    Write-Host ""
+}
+
 Write-Host "All mock-host tests PASS."
 Write-Host ""
 Write-Host "REMINDER: this does not prove CSP loads the plug-in."

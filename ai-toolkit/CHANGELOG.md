@@ -1,5 +1,44 @@
 # REDcoLAB 变更记录
 
+## 1.0.0 修正 2：真机验证探针（2026-10-15）
+
+真机加载验证一直没做成，核心障碍是**无法区分两种日志**：
+产品版只在 `REDCOLAB_LOG=1` 时写日志，而它的日志内容与我在模拟宿主上跑出来的**完全一样**。
+也就是说，即使拿到日志也无法判断「CSP 加载了」还是「我自己测试写下的」。
+
+### 新增
+
+- `src/probe/REDcoLAB_probe.cpp`：**诊断探针插件**。与产品版**分开构建**，特性：
+  - **无条件写日志**到 `%TEMP%\REDcoLAB_probe.log`，日志第二行是
+    `*** CSP LOADED THE FILE ***` —— 模拟宿主无法伪造这条证据
+  - `DllMain` 的 `DLL_PROCESS_ATTACH` 就写一行，**证明 DLL 被映射进进程**，
+    即使宿主从未调用入口点
+  - 逐个打印 `recordSuite` / `serviceSuite` 里每个函数指针是否存在（present / NULL），
+    包括 `filterActivationInitializeRecord` / `filterActivationRunRecord` 的取值
+  - **不修改任何像素**（它是量具，不是滤镜）
+  - 故意不注册任何参数项：失败时不能被归咎于参数注册逻辑
+- `tools/build.ps1 -Probe`：构建探针到 `dist\REDcoLAB_probe.dll`。
+- `tools/install_plugin.ps1 -Probe`：安装探针而非产品。
+- `tools/realmachine_test.ps1`：**一条命令走完真机验证准备**——
+  检查前置条件 → 构建探针 → 本地先验证探针（含不修改像素断言）→ 清理旧日志 →
+  安装到指定候选位置 → 打印你要做的两步与三种结果的处置方式。
+- `tools/mockhost.py --expect-untouched`：断言「产物不得修改任何像素」。
+  已反向验证：产品版在该模式下**正确 FAIL**，证明断言确实有效（不是空断言）。
+- `tools/run_tests.ps1` 增加探针环节：正常契约 + 最小契约，均须通过。
+- 重写 `docs/安装位置验证.md`：加入探针说明、日志样例、三种结果判读、候选位置排序、
+  八条二进制证据、以及验证完成后的收尾清单。
+
+### 测试结果
+
+- 探针在模拟宿主上：生命周期全部 OK，`pixels untouched (as required)` → **PASS**；
+  最小宿主契约下同样 PASS。
+- 产品版在 `--expect-untouched` 下正确 FAIL（反向验证断言有效）。
+- 全部既有测试保持通过（四组合 + 算法矩阵）。
+
+### 仍未完成
+
+**真机加载验证本身**。探针已就绪，需要一次真实的 CSP 重启执行。
+
 ## 1.0.0 修正 1：宿主调用守卫补全 + 客观测试强化（2026-10-15）
 
 ### 修复

@@ -459,6 +459,8 @@ def main():
     parser.add_argument("--quiet", action="store_true", help="only print the verdict")
     parser.add_argument("--minimal", action="store_true",
                         help="strip optional host callbacks to test plug-in robustness")
+    parser.add_argument("--expect-untouched", action="store_true",
+                        help="the artefact must NOT modify pixels (used for the diagnostic probe)")
     args = parser.parse_args()
 
     if not os.path.isfile(args.plugin):
@@ -524,6 +526,37 @@ def main():
     alpha_after = list(alpha)
 
     problems = []
+
+    if args.expect_untouched:
+        # Diagnostic probe mode: the artefact is a measurement instrument and
+        # must leave every byte alone.
+        original = bytearray()
+        for r, g, b, a in SOURCE:
+            original += bytes((r, g, b, a))
+        if after != bytes(original):
+            problems.append("artefact modified pixels but must not: got %s"
+                            % list(after[:12]))
+        if alpha_before != alpha_after:
+            problems.append("artefact modified alpha but must not")
+        if not args.quiet:
+            print("")
+            print("before:", [tuple(SOURCE[i]) for i in range(WIDTH * HEIGHT)])
+            print("after :", [tuple(after[i * 4:i * 4 + 4]) for i in range(WIDTH * HEIGHT)])
+            print("")
+            print("--- host log ---")
+            for line in log:
+                print("  " + line)
+        if problems:
+            print("")
+            for p in problems:
+                print("PROBLEM: " + p)
+            print("")
+            print("RESULT: FAIL")
+            return 1
+        print("")
+        print("checks: pixels untouched (as required), alpha untouched, lifecycle completed")
+        print("RESULT: PASS")
+        return 0
 
     # 1. every written pixel must be gray, EXCEPT fully transparent pixels:
     #    the official sample skips alpha == 0, so "untouched" is correct there

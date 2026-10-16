@@ -15,7 +15,10 @@
 
 [CmdletBinding()]
 param(
-    [switch]$KeepStage
+    [switch]$KeepStage,
+    # Build the diagnostic probe instead of the product. The probe always logs,
+    # never modifies pixels, and exists to produce evidence from a real CSP run.
+    [switch]$Probe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -125,14 +128,27 @@ $commonArgs = @(
     '-lkernel32'
 )
 
-$outputs = @(
-    (Join-Path $distDir 'REDcoLAB.cpm'),
-    (Join-Path $distDir 'REDcoLAB.dll')
-)
+# Each build target: output file name -> source file.
+if ($Probe) {
+    $probeSource = Join-Path $srcDir 'probe\REDcoLAB_probe.cpp'
+    if (-not (Test-Path -LiteralPath $probeSource)) { Fail "missing $probeSource" }
+    $targets = @{ 'REDcoLAB_probe.dll' = $probeSource }
+    Write-Host "build target  : PROBE (diagnostic, never modifies pixels)"
+}
+else {
+    $targets = @{
+        'REDcoLAB.cpm' = $source
+        'REDcoLAB.dll' = $source
+    }
+    Write-Host "build target  : product"
+}
+Write-Host ""
 
-foreach ($out in $outputs) {
-    Write-Host "compiling -> $(Split-Path -Leaf $out)"
-    $compilerArgs = $commonArgs + @('-o', $out, $source)
+$built = @()
+foreach ($name in $targets.Keys) {
+    $out = Join-Path $distDir $name
+    Write-Host "compiling -> $name"
+    $compilerArgs = $commonArgs + @('-o', $out, $targets[$name])
     $compilerOutput = & $gpp @compilerArgs 2>&1
     if ($LASTEXITCODE -ne 0) {
         Write-Host $compilerOutput
@@ -143,10 +159,11 @@ foreach ($out in $outputs) {
         Write-Host $compilerOutput
         Fail "compiler emitted output despite -Werror"
     }
+    $built += $out
 }
 
 # ---------------------------------------------------------------- verify output
-foreach ($out in $outputs) {
+foreach ($out in $built) {
     if (-not (Test-Path -LiteralPath $out)) { Fail "expected output missing: $out" }
     $item = Get-Item -LiteralPath $out
     $bytes = [System.IO.File]::ReadAllBytes($out)
@@ -171,6 +188,16 @@ foreach ($out in $outputs) {
 }
 
 Write-Host ""
-Write-Host "BUILD OK - dist\REDcoLAB.cpm and dist\REDcoLAB.dll"
-Write-Host "Next: powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_tests.ps1"
+if ($Probe) {
+    Write-Host "PROBE BUILD OK - dist\REDcoLAB_probe.dll"
+    Write-Host ""
+    Write-Host "The probe always logs to %TEMP%\REDcoLAB_probe.log and never changes pixels."
+    Write-Host "Install it with:"
+    Write-Host "  powershell -NoProfile -ExecutionPolicy Bypass -File tools\install_plugin.ps1 -Probe -Only 1 -Execute"
+    Write-Host "Then fully restart CSP and look at both the Filter menu and that log file."
+}
+else {
+    Write-Host "BUILD OK - dist\REDcoLAB.cpm and dist\REDcoLAB.dll"
+    Write-Host "Next: powershell -NoProfile -ExecutionPolicy Bypass -File tools\run_tests.ps1"
+}
 exit 0

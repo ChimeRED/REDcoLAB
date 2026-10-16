@@ -48,11 +48,25 @@ moduleInitialize / filterInitialize / filterRun 三组。详见 [已知限制与
 - CSP 主程序二进制里能搜到 `CLIPStudioModule` + `PlugIn` 路径片段，以及 `PlugInError` / `PlugInNotFound` 错误串
 - CSP 主程序里能搜到宿主符号 `_TriglavPlugInHost`、`SExtensionModuleInitializeHost`
 - **`.cpm` 这个字面量在主程序里出现 0 次** ← 这就是为什么要同时产出 `.dll`
-- `%APPDATA%\...\CELSYS\CLIPStudioPlugIn\PAINT` 已存在（空，由 CSP 自己创建）
+- `%APPDATA%\...\CELSYS\UserData\CELSYS\CLIPStudioPlugIn\PAINT` 已存在（空，由 CSP 自己创建）
 
 旧版 v0.1.6 只装了 `.cpm` 一个位置且从未重启 CSP 验证 —— 这很可能是它「装不上」的真正原因。
 
-**解除方法**：运行 `tools\install_plugin.ps1 -Execute` 把所有候选位置都放上，完全重启一次 CSP 看菜单。
+### 用诊断探针一次性验证（推荐）
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\realmachine_test.ps1
+```
+
+这条命令会自动构建一个**诊断探针**、本地先验证它、清空旧日志、装到最可能的目录，
+然后告诉你重启 CSP 后要看什么。
+
+**探针为什么可靠**：它**无条件写日志**，日志里有 `*** CSP LOADED THE FILE ***` 这一行
+—— 模拟宿主无法伪造这条证据。而产品版只在 `REDCOLAB_LOG=1` 时写日志，
+且内容和我在模拟宿主上跑出来的**完全一样**，无法区分。
+
+探针**不修改任何像素**，日志还会逐个列出宿主提供的每个回调是否存在，
+所以即使失败也能拿到可行动的证据。详见 [真机加载验证指南](docs/安装位置验证.md)。
 
 ---
 

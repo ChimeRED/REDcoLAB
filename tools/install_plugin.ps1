@@ -26,7 +26,11 @@ param(
     # Install into exactly ONE candidate (by its number in the list) instead of
     # all of them. Use this once the load location is known, or to isolate
     # which location actually works by testing them one at a time.
-    [int]$Only = 0
+    [int]$Only = 0,
+    # Install the diagnostic probe instead of the product. The probe always
+    # logs and never changes pixels, so a failed real-machine test still yields
+    # evidence.
+    [switch]$Probe
 )
 
 $ErrorActionPreference = 'Stop'
@@ -44,12 +48,22 @@ Write-Host "mode          : $(if ($Execute) { 'EXECUTE (will write files)' } els
 Write-Host ""
 
 # ---------------------------------------------------------------- artefacts
-$artefacts = @()
-foreach ($name in @('REDcoLAB.cpm', 'REDcoLAB.dll')) {
-    $p = Join-Path $distDir $name
-    if (Test-Path -LiteralPath $p) { $artefacts += $p }
+if ($Probe) {
+    $probePath = Join-Path $distDir 'REDcoLAB_probe.dll'
+    if (-not (Test-Path -LiteralPath $probePath)) {
+        Fail "probe not built; run: tools\build.ps1 -Probe"
+    }
+    $artefacts = @($probePath)
+    Write-Host "artefact set  : PROBE build (diagnostic, changes no pixels)" -ForegroundColor Yellow
 }
-if ($artefacts.Count -eq 0) { Fail "no artefacts in dist\; run tools\build.ps1 first" }
+else {
+    $artefacts = @()
+    foreach ($name in @('REDcoLAB.cpm', 'REDcoLAB.dll')) {
+        $p = Join-Path $distDir $name
+        if (Test-Path -LiteralPath $p) { $artefacts += $p }
+    }
+    if ($artefacts.Count -eq 0) { Fail "no artefacts in dist\; run tools\build.ps1 first" }
+}
 
 foreach ($a in $artefacts) {
     $item = Get-Item -LiteralPath $a
