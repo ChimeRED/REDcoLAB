@@ -61,21 +61,48 @@ $mockHost = Join-Path $PSScriptRoot 'mockhost.py'
 $failures = 0
 
 foreach ($artefact in $existing) {
-    Write-Host "--- mock host lifecycle test: $(Split-Path -Leaf $artefact) ---"
-    & $Python $mockHost $artefact
-    $code = $LASTEXITCODE
-    if ($code -ne 0) {
-        $failures++
-        Write-Host "  -> FAILED (exit $code)" -ForegroundColor Red
-        if (-not $KeepGoing) { Fail "mock host test failed for $(Split-Path -Leaf $artefact)" }
+    # Two host contracts per artefact:
+    #   normal  - the plug-in's full expected contract
+    #   minimal - optional host callbacks stripped; must still work, never crash
+    foreach ($mode in @('normal', 'minimal')) {
+        $label = Split-Path -Leaf $artefact
+        if ($mode -eq 'minimal') { $label = "$label (minimal host)" }
+        Write-Host "--- mock host lifecycle test: $label ---"
+
+        if ($mode -eq 'minimal') {
+            & $Python $mockHost $artefact --minimal
+        }
+        else {
+            & $Python $mockHost $artefact
+        }
+        $code = $LASTEXITCODE
+        if ($code -ne 0) {
+            $failures++
+            Write-Host "  -> FAILED (exit $code)" -ForegroundColor Red
+            if (-not $KeepGoing) { Fail "mock host test failed for $label" }
+        }
+        else {
+            Write-Host "  -> PASS" -ForegroundColor Green
+        }
+        Write-Host ""
     }
-    else {
-        Write-Host "  -> PASS" -ForegroundColor Green
-    }
-    Write-Host ""
 }
 
 if ($failures -gt 0) { Fail "$failures artefact(s) failed" }
+
+# Algorithm/strength matrix: run once, against the canonical artefact. The
+# reference formulas in algorithm_test.py are written independently of
+# src/grayscale.h so a shared mistake cannot hide.
+$matrixTarget = Join-Path $distDir 'REDcoLAB.cpm'
+if (Test-Path -LiteralPath $matrixTarget) {
+    Write-Host "--- algorithm / strength matrix test ---"
+    & $Python (Join-Path $PSScriptRoot 'algorithm_test.py') $matrixTarget
+    if ($LASTEXITCODE -ne 0) {
+        Fail "algorithm matrix test failed (exit $LASTEXITCODE)"
+    }
+    Write-Host "  -> PASS" -ForegroundColor Green
+    Write-Host ""
+}
 
 Write-Host "All mock-host tests PASS."
 Write-Host ""

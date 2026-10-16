@@ -198,6 +198,155 @@ static inline TriglavPlugInInt CallProcess(TriglavPlugInRecordSuite* rec,
     return processResult;
 }
 
+/* ---------------- property service guards ----------------
+ *
+ * The property service is how parameters are declared, so its procs are
+ * needed rather than optional - but they can still be absent on a host that
+ * chose not to expose them, and a call through a NULL pointer takes CSP down
+ * with it. Registration therefore fails cleanly instead of crashing, and the
+ * caller reports it.
+ */
+
+static inline bool PropertyServiceUsable(TriglavPlugInPropertyService* ps) {
+    return ps != NULL &&
+           ps->createProc != NULL &&
+           ps->addItemProc != NULL &&
+           ps->setIntegerValueProc != NULL &&
+           ps->setIntegerDefaultValueProc != NULL &&
+           ps->setIntegerMinValueProc != NULL &&
+           ps->setIntegerMaxValueProc != NULL;
+}
+
+static inline void CallPropertyAddItem(TriglavPlugInPropertyService* ps,
+                                       TriglavPlugInPropertyObject prop, TriglavPlugInInt key,
+                                       TriglavPlugInInt valueType, TriglavPlugInInt valueKind,
+                                       TriglavPlugInInt inputKind, TriglavPlugInStringObject caption,
+                                       TriglavPlugInChar accessKey) {
+    if (ps != NULL && ps->addItemProc != NULL) {
+        ps->addItemProc(prop, key, valueType, valueKind, inputKind, caption, accessKey);
+    }
+}
+
+static inline void CallPropertySetInteger(TriglavPlugInPropertyService* ps,
+                                          TriglavPlugInPropertyObject prop,
+                                          TriglavPlugInInt key, TriglavPlugInInt value) {
+    if (ps != NULL && ps->setIntegerValueProc != NULL) {
+        ps->setIntegerValueProc(prop, key, value);
+    }
+}
+
+static inline void CallPropertySetIntegerDefault(TriglavPlugInPropertyService* ps,
+                                                 TriglavPlugInPropertyObject prop,
+                                                 TriglavPlugInInt key, TriglavPlugInInt value) {
+    if (ps != NULL && ps->setIntegerDefaultValueProc != NULL) {
+        ps->setIntegerDefaultValueProc(prop, key, value);
+    }
+}
+
+static inline void CallPropertySetIntegerRange(TriglavPlugInPropertyService* ps,
+                                               TriglavPlugInPropertyObject prop,
+                                               TriglavPlugInInt key,
+                                               TriglavPlugInInt minValue, TriglavPlugInInt maxValue) {
+    if (ps != NULL && ps->setIntegerMinValueProc != NULL) {
+        ps->setIntegerMinValueProc(prop, key, minValue);
+    }
+    if (ps != NULL && ps->setIntegerMaxValueProc != NULL) {
+        ps->setIntegerMaxValueProc(prop, key, maxValue);
+    }
+}
+
+static inline void CallPropertyRelease(TriglavPlugInPropertyService* ps,
+                                       TriglavPlugInPropertyObject prop) {
+    if (ps != NULL && ps->releaseProc != NULL) {
+        ps->releaseProc(prop);
+    }
+}
+
+static inline void CallPropertyAddEnumerationItem(TriglavPlugInPropertyService2* ps2,
+                                                  TriglavPlugInPropertyObject prop,
+                                                  TriglavPlugInInt key, TriglavPlugInInt value,
+                                                  TriglavPlugInStringObject caption,
+                                                  TriglavPlugInChar accessKey) {
+    if (ps2 != NULL && ps2->addEnumerationItemProc != NULL) {
+        ps2->addEnumerationItemProc(prop, key, value, caption, accessKey);
+    }
+}
+
+static inline void CallPropertySetEnumeration(TriglavPlugInPropertyService2* ps2,
+                                              TriglavPlugInPropertyObject prop,
+                                              TriglavPlugInInt key, TriglavPlugInInt value) {
+    if (ps2 != NULL && ps2->setEnumerationValueProc != NULL) {
+        ps2->setEnumerationValueProc(prop, key, value);
+    }
+}
+
+static inline void CallPropertySetEnumerationDefault(TriglavPlugInPropertyService2* ps2,
+                                                     TriglavPlugInPropertyObject prop,
+                                                     TriglavPlugInInt key, TriglavPlugInInt value) {
+    if (ps2 != NULL && ps2->setEnumerationDefaultValueProc != NULL) {
+        ps2->setEnumerationDefaultValueProc(prop, key, value);
+    }
+}
+
+static inline void CallPropertyStoreValue(TriglavPlugInPropertyService2* ps2,
+                                          TriglavPlugInPropertyObject prop,
+                                          TriglavPlugInInt key, TriglavPlugInBool store) {
+    if (ps2 != NULL && ps2->setItemStoreValueProc != NULL) {
+        ps2->setItemStoreValueProc(prop, key, store);
+    }
+}
+
+/* ---------------- filter initialize record guards ---------------- */
+
+static inline void CallSetFilterCategory(TriglavPlugInRecordSuite* rec, TriglavPlugInHostObject host,
+                                         TriglavPlugInStringObject name, TriglavPlugInChar key) {
+    TriglavPlugInFilterInitializeRecord* fi = TriglavPlugInGetFilterInitializeRecord(rec);
+    if (fi != NULL && fi->setFilterCategoryNameProc != NULL) {
+        TriglavPlugInFilterInitializeSetFilterCategoryName(rec, host, name, key);
+    }
+}
+
+static inline void CallSetFilterName(TriglavPlugInRecordSuite* rec, TriglavPlugInHostObject host,
+                                     TriglavPlugInStringObject name, TriglavPlugInChar key) {
+    TriglavPlugInFilterInitializeRecord* fi = TriglavPlugInGetFilterInitializeRecord(rec);
+    if (fi != NULL && fi->setFilterNameProc != NULL) {
+        TriglavPlugInFilterInitializeSetFilterName(rec, host, name, key);
+    }
+}
+
+static inline void CallSetCanPreview(TriglavPlugInRecordSuite* rec, TriglavPlugInHostObject host,
+                                     TriglavPlugInBool canPreview) {
+    TriglavPlugInFilterInitializeRecord* fi = TriglavPlugInGetFilterInitializeRecord(rec);
+    if (fi != NULL && fi->setCanPreviewProc != NULL) {
+        TriglavPlugInFilterInitializeSetCanPreview(rec, host, canPreview);
+    }
+}
+
+static inline void CallSetTargetKinds(TriglavPlugInRecordSuite* rec, TriglavPlugInHostObject host,
+                                      const TriglavPlugInInt* kinds, TriglavPlugInInt count) {
+    TriglavPlugInFilterInitializeRecord* fi = TriglavPlugInGetFilterInitializeRecord(rec);
+    if (fi != NULL && fi->setTargetKindsProc != NULL) {
+        TriglavPlugInFilterInitializeSetTargetKinds(rec, host, kinds, count);
+    }
+}
+
+static inline void CallSetProperty(TriglavPlugInRecordSuite* rec, TriglavPlugInHostObject host,
+                                   TriglavPlugInPropertyObject prop) {
+    TriglavPlugInFilterInitializeRecord* fi = TriglavPlugInGetFilterInitializeRecord(rec);
+    if (fi != NULL && fi->setPropertyProc != NULL) {
+        TriglavPlugInFilterInitializeSetProperty(rec, host, prop);
+    }
+}
+
+static inline void CallSetPropertyCallback(TriglavPlugInRecordSuite* rec, TriglavPlugInHostObject host,
+                                           TriglavPlugInPropertyCallBackProc callback,
+                                           TriglavPlugInPtr data) {
+    TriglavPlugInFilterInitializeRecord* fi = TriglavPlugInGetFilterInitializeRecord(rec);
+    if (fi != NULL && fi->setPropertyCallBackProc != NULL) {
+        TriglavPlugInFilterInitializeSetPropertyCallBack(rec, host, callback, data);
+    }
+}
+
 /* ------------------------------------------------------------------ property callback */
 
 static void TRIGLAV_PLUGIN_CALLBACK RedcoPropertyCallback(TriglavPlugInInt* result,
@@ -262,14 +411,16 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
         }
 
         TriglavPlugInInt hostVersion = 0;
+        TriglavPlugInInt versionResult = kTriglavPlugInAPIResultFailed;
         if (mi->getHostVersionProc != NULL) {
-            mi->getHostVersionProc(&hostVersion, host);
+            versionResult = mi->getHostVersionProc(&hostVersion, host);
         }
-        REDCOLAB_LOG("[init] hostVersion=%d required=%d\n",
-                     (int)hostVersion, (int)kTriglavPlugInNeedHostVersion);
+        REDCOLAB_LOG("[init] hostVersion=%d (apiResult=%d) required=%d\n",
+                     (int)hostVersion, (int)versionResult, (int)kTriglavPlugInNeedHostVersion);
 
-        if (hostVersion < kTriglavPlugInNeedHostVersion) {
-            REDCOLAB_LOG("[init] host too old, refusing to load\n");
+        if (versionResult != kTriglavPlugInAPIResultSuccess ||
+            hostVersion < kTriglavPlugInNeedHostVersion) {
+            REDCOLAB_LOG("[init] host version unusable or too old, refusing to load\n");
             return;
         }
 
@@ -305,8 +456,10 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
 
     /* ---------------------------------------------------------- filter init */
     if (selector == kTriglavPlugInSelectorFilterInitialize) {
-        if (TriglavPlugInGetFilterInitializeRecord(rec) == NULL || strSvc == NULL || propSvc == NULL) {
-            REDCOLAB_LOG("[filterInit] FAILED: record=%p stringService=%p propertyService=%p\n",
+        if (TriglavPlugInGetFilterInitializeRecord(rec) == NULL || strSvc == NULL ||
+            !PropertyServiceUsable(propSvc)) {
+            REDCOLAB_LOG("[filterInit] FAILED: record=%p stringService=%p propertyService=%p "
+                         "(property service must expose create/addItem/setInteger*)\n",
                          (void*)TriglavPlugInGetFilterInitializeRecord(rec), (void*)strSvc, (void*)propSvc);
             return;
         }
@@ -314,13 +467,13 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
         /* menu entry: Filter > 红红子LAB > 一键灰度 */
         TriglavPlugInStringObject category = MAKESTR(strSvc, kTextCategory);
         TriglavPlugInStringObject filterName = MAKESTR(strSvc, kTextFilterName);
-        TriglavPlugInFilterInitializeSetFilterCategoryName(rec, host, category, 'r');
-        TriglavPlugInFilterInitializeSetFilterName(rec, host, filterName, 'g');
+        CallSetFilterCategory(rec, host, category, 'r');
+        CallSetFilterName(rec, host, filterName, 'g');
         ReleaseString(strSvc, category);
         ReleaseString(strSvc, filterName);
 
         /* allow CSP's live preview while the user drags a slider */
-        TriglavPlugInFilterInitializeSetCanPreview(rec, host, kTriglavPlugInBoolTrue);
+        CallSetCanPreview(rec, host, kTriglavPlugInBoolTrue);
 
         /* Only raster layer kinds are accepted. Anything else (vector, text,
          * folder, 3D, frame border, ...) is filtered out by the host, which is
@@ -331,25 +484,23 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
             kTriglavPlugInFilterTargetKindRasterLayerGrayAlpha,
             kTriglavPlugInFilterTargetKindRasterLayerBinarizationGrayAlpha
         };
-        TriglavPlugInFilterInitializeSetTargetKinds(
-            rec, host, targets, static_cast<TriglavPlugInInt>(sizeof(targets) / sizeof(targets[0])));
+        CallSetTargetKinds(rec, host, targets,
+                           static_cast<TriglavPlugInInt>(sizeof(targets) / sizeof(targets[0])));
 
         /* ---- parameter items ---- */
         TriglavPlugInPropertyObject prop = NULL;
-        if (propSvc->createProc == NULL ||
-            propSvc->createProc(&prop) != kTriglavPlugInAPIResultSuccess ||
-            prop == NULL) {
+        if (propSvc->createProc(&prop) != kTriglavPlugInAPIResultSuccess || prop == NULL) {
             REDCOLAB_LOG("[filterInit] FAILED: could not create property object\n");
             return;
         }
 
         /* algorithm (enumeration) */
         TriglavPlugInStringObject capAlgorithm = MAKESTR(strSvc, kTextAlgorithm);
-        propSvc->addItemProc(prop, redcolab::kItemAlgorithm,
-                             kTriglavPlugInPropertyValueTypeEnumeration,
-                             kTriglavPlugInPropertyValueKindDefault,
-                             kTriglavPlugInPropertyInputKindDefault,
-                             capAlgorithm, 'a');
+        CallPropertyAddItem(propSvc, prop, redcolab::kItemAlgorithm,
+                            kTriglavPlugInPropertyValueTypeEnumeration,
+                            kTriglavPlugInPropertyValueKindDefault,
+                            kTriglavPlugInPropertyInputKindDefault,
+                            capAlgorithm, 'a');
         ReleaseString(strSvc, capAlgorithm);
 
         struct AlgorithmItem {
@@ -371,38 +522,32 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
         for (size_t i = 0; i < sizeof(kAlgorithmItems) / sizeof(kAlgorithmItems[0]); ++i) {
             const AlgorithmItem& it = kAlgorithmItems[i];
             TriglavPlugInStringObject cap = MakeUnicodeString(strSvc, it.caption, it.length);
-            if (propSvc2 != NULL && propSvc2->addEnumerationItemProc != NULL) {
-                propSvc2->addEnumerationItemProc(prop, redcolab::kItemAlgorithm, it.value, cap, it.accessKey);
-            }
+            CallPropertyAddEnumerationItem(propSvc2, prop, redcolab::kItemAlgorithm,
+                                           it.value, cap, it.accessKey);
             ReleaseString(strSvc, cap);
         }
-        if (propSvc2 != NULL && propSvc2->setEnumerationValueProc != NULL) {
-            propSvc2->setEnumerationValueProc(prop, redcolab::kItemAlgorithm, redcolab::kAlgoRec709);
-            propSvc2->setEnumerationDefaultValueProc(prop, redcolab::kItemAlgorithm, redcolab::kAlgoRec709);
-        }
+        CallPropertySetEnumeration(propSvc2, prop, redcolab::kItemAlgorithm, redcolab::kAlgoRec709);
+        CallPropertySetEnumerationDefault(propSvc2, prop, redcolab::kItemAlgorithm, redcolab::kAlgoRec709);
 
         /* strength (integer slider) */
         TriglavPlugInStringObject capStrength = MAKESTR(strSvc, kTextStrength);
-        propSvc->addItemProc(prop, redcolab::kItemStrength,
-                             kTriglavPlugInPropertyValueTypeInteger,
-                             kTriglavPlugInPropertyValueKindDefault,
-                             kTriglavPlugInPropertyInputKindDefault,
-                             capStrength, 's');
+        CallPropertyAddItem(propSvc, prop, redcolab::kItemStrength,
+                            kTriglavPlugInPropertyValueTypeInteger,
+                            kTriglavPlugInPropertyValueKindDefault,
+                            kTriglavPlugInPropertyInputKindDefault,
+                            capStrength, 's');
         ReleaseString(strSvc, capStrength);
-        propSvc->setIntegerValueProc(prop, redcolab::kItemStrength, 100);
-        propSvc->setIntegerDefaultValueProc(prop, redcolab::kItemStrength, 100);
-        propSvc->setIntegerMinValueProc(prop, redcolab::kItemStrength, 0);
-        propSvc->setIntegerMaxValueProc(prop, redcolab::kItemStrength, 100);
+        CallPropertySetInteger(propSvc, prop, redcolab::kItemStrength, 100);
+        CallPropertySetIntegerDefault(propSvc, prop, redcolab::kItemStrength, 100);
+        CallPropertySetIntegerRange(propSvc, prop, redcolab::kItemStrength, 0, 100);
 
         /* remember the user's last settings across invocations */
-        if (propSvc2 != NULL && propSvc2->setItemStoreValueProc != NULL) {
-            propSvc2->setItemStoreValueProc(prop, redcolab::kItemAlgorithm, kTriglavPlugInBoolTrue);
-            propSvc2->setItemStoreValueProc(prop, redcolab::kItemStrength, kTriglavPlugInBoolTrue);
-        }
+        CallPropertyStoreValue(propSvc2, prop, redcolab::kItemAlgorithm, kTriglavPlugInBoolTrue);
+        CallPropertyStoreValue(propSvc2, prop, redcolab::kItemStrength, kTriglavPlugInBoolTrue);
 
-        TriglavPlugInFilterInitializeSetProperty(rec, host, prop);
-        TriglavPlugInFilterInitializeSetPropertyCallBack(rec, host, RedcoPropertyCallback, *data);
-        propSvc->releaseProc(prop);
+        CallSetProperty(rec, host, prop);
+        CallSetPropertyCallback(rec, host, RedcoPropertyCallback, *data);
+        CallPropertyRelease(propSvc, prop);
 
         RedcoState* st = static_cast<RedcoState*>(*data);
         if (st != NULL) {

@@ -1,5 +1,35 @@
 # REDcoLAB 变更记录
 
+## 1.0.0 修正 1：宿主调用守卫补全 + 客观测试强化（2026-10-15）
+
+### 修复
+
+- **补全初始化阶段的宿主调用守卫**（真实缺陷，会导致 CSP 崩溃）。
+  上一轮只守卫了滤镜执行阶段，`filterInitialize` 里仍有 8 处未判空的宿主函数指针调用：
+  `addItemProc`、`setIntegerValueProc`、`setIntegerDefaultValueProc`、`setIntegerMinValueProc`、
+  `setIntegerMaxValueProc`、`releaseProc`，以及全部 `TriglavPlugInFilterInitializeSet*` 宏。
+  现已新增 `PropertyServiceUsable` 前置校验与一整层 `CallProperty*` / `CallSetFilter*` 守卫函数。
+  见错误记录 `ERR-20261015-003`。
+- `getHostVersionProc` 的返回值现在被检查：API 调用失败与版本过低都会明确拒绝加载，并写入日志。
+
+### 新增
+
+- `tools/algorithm_test.py`：**算法/强度矩阵测试**。用**独立重写的教科书公式**作为参照，
+  逐像素比对插件输出，避免与 `src/grayscale.h` 同源而共享同一处错误。
+  - 8 种算法 × 满强度，逐像素比对
+  - 强度 0..100 步进 10，共 11 档，逐通道比对
+  - 8 算法 × 3 强度 = 24 组 Alpha 不变性与透明像素安全性检查
+- `tools/mockhost.py` 新增 `--minimal` 模式：剥离可选宿主回调，验证插件健壮性。
+  已固化为 `tools/run_tests.ps1` 的常驻环节（每个产物跑 normal + minimal 两种契约）。
+- `tools/install_plugin.ps1` 新增 `-Only <n>`：只安装到指定候选位置，便于把加载位置收敛到唯一答案。
+- `docs/安装位置验证.md`：真机加载位置的验证方案、结果判读表与备选位置排序。
+
+### 测试结果
+
+- `build.ps1`：零警告通过。
+- `run_tests.ps1`：`REDcoLAB.cpm` / `REDcoLAB.dll` × normal / minimal **四个组合全部 PASS**；
+  算法矩阵测试 PASS。退出码 0。
+
 ## 1.0.0 框架建立（2026-10-15）
 
 按《通用 Agent 治理框架搭建规范》v1.0 为 CSP 滤镜插件项目建立 Agent 治理框架。

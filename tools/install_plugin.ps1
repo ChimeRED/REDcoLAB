@@ -22,7 +22,11 @@
 [CmdletBinding()]
 param(
     [switch]$Execute,
-    [switch]$Clean
+    [switch]$Clean,
+    # Install into exactly ONE candidate (by its number in the list) instead of
+    # all of them. Use this once the load location is known, or to isolate
+    # which location actually works by testing them one at a time.
+    [int]$Only = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,11 +94,20 @@ Write-Host "candidate install locations:"
 $index = 1
 foreach ($c in $candidates) {
     $exists = Test-Path -LiteralPath $c.Path
-    Write-Host ("  [{0}] {1}" -f $index, $c.Path)
+    $marker = ''
+    if ($Only -gt 0 -and $index -eq $Only) { $marker = '   <== selected by -Only' }
+    Write-Host ("  [{0}] {1}{2}" -f $index, $c.Path, $marker)
     Write-Host ("      exists: {0}   note: {1}" -f $exists, $c.Note)
     $index++
 }
 Write-Host ""
+
+if ($Only -gt 0) {
+    if ($Only -gt $candidates.Count) { Fail "-Only $Only is out of range (1..$($candidates.Count))" }
+    $candidates = @($candidates[$Only - 1])
+    Write-Host ("restricted to candidate [{0}]: {1}" -f $Only, $candidates[0].Path)
+    Write-Host ""
+}
 
 if (-not $Execute) {
     Write-Host "DRY RUN - nothing was written."

@@ -61,6 +61,15 @@ ROW_BYTES = WIDTH * 4
 PIXEL_BYTES = 4
 BLOCK = None  # filled once Rect type exists
 
+# The single test image both mockhost and algorithm_test describe.
+# Distinct, non-gray colours chosen so every algorithm produces a different
+# result, and with alpha values 255 / 128 / 0 / 1 to cover opaque, semi, fully
+# transparent and near-transparent.
+SOURCE = [
+    (200, 40, 90, 255), (10, 220, 30, 128), (90, 90, 200, 0), (255, 0, 0, 255),
+    (0, 255, 0, 200), (0, 0, 255, 1), (123, 45, 200, 255), (7, 8, 9, 64),
+]
+
 
 class Point(ctypes.Structure):
     _fields_ = [("x", Int), ("y", Int)]
@@ -120,8 +129,15 @@ def _store(text):
     return handle
 
 
-def build(pixels, alpha, log, prop_state):
-    """Create the service suite and record suite for one run. Returns (suite, keep)."""
+def build(pixels, alpha, log, prop_state, minimal=False):
+    """Create the service suite and record suite for one run. Returns (suite, keep).
+
+    minimal=True strips every OPTIONAL host callback, leaving only the bare
+    minimum the plug-in needs to do its job. A correct plug-in must survive a
+    host that does not expose optional procs; that was a real crash before
+    (see .agents/skill-error-record/plugin-dev-2026-10-15-null-host-proc.md),
+    so it gets a permanent regression test.
+    """
     keep = []
     svc = suite(256)
 
@@ -415,6 +431,19 @@ def build(pixels, alpha, log, prop_state):
     put(fr, 17, progress_total, keep)
     put(fr, 18, progress_done, keep)
 
+    if minimal:
+        # Deliberately remove only OPTIONAL procs the plug-in must be able to
+        # live without. getHostVersion stays: it is a required callback (the
+        # plug-in must know the host version before it can proceed), so a host
+        # without it is not a valid host and refusing to load is correct.
+        fr[9] = Ptr(None)    # getSelectAreaRectProc
+        fr[10] = Ptr(None)   # hasSelectAreaOffscreenProc
+        fr[12] = Ptr(None)   # updateDestinationOffscreenRectProc
+        fr[17] = Ptr(None)   # setProgressTotalProc
+        fr[18] = Ptr(None)   # setProgressDoneProc
+        fi[3] = Ptr(None)    # setUseBlankImageProc
+        ps[2] = Ptr(None)    # property releaseProc
+
     rec[0] = ctypes.cast(mi, Ptr)
     rec[5] = ctypes.cast(fi, Ptr)
     rec[6] = ctypes.cast(fr, Ptr)
@@ -428,6 +457,8 @@ def main():
     parser.add_argument("--expect-algorithm", type=int, default=None,
                         help="select a different algorithm before filterRun and expect it applied")
     parser.add_argument("--quiet", action="store_true", help="only print the verdict")
+    parser.add_argument("--minimal", action="store_true",
+                        help="strip optional host callbacks to test plug-in robustness")
     args = parser.parse_args()
 
     if not os.path.isfile(args.plugin):
@@ -436,12 +467,7 @@ def main():
 
     pixels = (ctypes.c_ubyte * (WIDTH * HEIGHT * 4))()
     alpha = (ctypes.c_ubyte * (WIDTH * HEIGHT))()
-    # distinct, non-gray source colours; alpha varies so we can prove it is untouched
-    source = [
-        (200, 40, 90, 255), (10, 220, 30, 128), (90, 90, 200, 0), (255, 0, 0, 255),
-        (0, 255, 0, 200), (0, 0, 255, 1), (123, 45, 200, 255), (7, 8, 9, 64),
-    ]
-    for i, (r, g, b, a) in enumerate(source):
+    for i, (r, g, b, a) in enumerate(SOURCE):
         pixels[i * 4 + 0] = r
         pixels[i * 4 + 1] = g
         pixels[i * 4 + 2] = b
@@ -451,7 +477,7 @@ def main():
     alpha_before = list(alpha)
     log = []
     prop_state = {}
-    svc, rec, keep = build(pixels, alpha, log, prop_state)
+    svc, rec, keep = build(pixels, alpha, log, prop_state, minimal=args.minimal)
 
     server = Server()
     ctypes.memmove(ctypes.byref(server, Server.record.offset), rec, ctypes.sizeof(rec))
@@ -479,12 +505,17 @@ def main():
             print("[%-15s] %s" % (name, "OK" if ok else "FAILED(%d)" % result.value))
         return ok
 
-    if args.expect_algorithm is not None:
-        prop_state.setdefault(1, {})["value"] = args.expect_algorithm
-
     ok = True
     ok &= call(SEL_MODULE_INIT, "moduleInitialize")
     ok &= call(SEL_FILTER_INIT, "filterInitialize")
+
+    # The user changes parameters *after* the dialog opens, so the value has to
+    # be written between filterInitialize and filterRun to mirror real CSP
+    # timing. Writing it earlier would be overwritten by the plug-in's own
+    # registration defaults, which would silently make this flag do nothing.
+    if args.expect_algorithm is not None:
+        prop_state.setdefault(1, {})["value"] = args.expect_algorithm
+
     ok &= call(SEL_FILTER_RUN, "filterRun")
     ok &= call(SEL_FILTER_TERM, "filterTerminate")
     ok &= call(SEL_MODULE_TERM, "moduleTerminate")
@@ -499,7 +530,7 @@ def main():
     #    and is asserted separately below.
     for i in range(WIDTH * HEIGHT):
         r, g, b, a = after[i * 4:i * 4 + 4]
-        if source[i][3] == 0:
+        if SOURCE[i][3] == 0:
             continue
         if not (r == g == b):
             problems.append("pixel %d is not gray: rgb=(%d,%d,%d)" % (i, r, g, b))
@@ -510,11 +541,11 @@ def main():
 
     # 3. pixels with alpha 0 must be left alone
     for i in range(WIDTH * HEIGHT):
-        if source[i][3] == 0:
+        if SOURCE[i][3] == 0:
             got = tuple(after[i * 4:i * 4 + 4])
-            if got != source[i]:
+            if got != SOURCE[i]:
                 problems.append("fully transparent pixel %d was modified: %s -> %s"
-                                % (i, source[i], got))
+                                % (i, SOURCE[i], got))
 
     # 4. registration must report the filter kind and the raster targets
     kind_line = [l for l in log if l.startswith("moduleKind")]
@@ -522,15 +553,16 @@ def main():
         problems.append("moduleKind was not reported as Filter (0x%X): %s"
                         % (MODULE_KIND_FILTER, kind_line))
 
-    reported_targets = prop_state.get("__targets__", [])
-    if reported_targets != TARGET_KINDS_EXPECTED:
-        problems.append("targetKinds mismatch: %s != %s"
-                        % (["0x%X" % v for v in reported_targets],
-                           ["0x%X" % v for v in TARGET_KINDS_EXPECTED]))
+    if not args.minimal:
+        reported_targets = prop_state.get("__targets__", [])
+        if reported_targets != TARGET_KINDS_EXPECTED:
+            problems.append("targetKinds mismatch: %s != %s"
+                            % (["0x%X" % v for v in reported_targets],
+                               ["0x%X" % v for v in TARGET_KINDS_EXPECTED]))
 
     if not args.quiet:
         print("")
-        print("before:", [tuple(source[i]) for i in range(WIDTH * HEIGHT)])
+        print("before:", [tuple(SOURCE[i]) for i in range(WIDTH * HEIGHT)])
         print("after :", [tuple(after[i * 4:i * 4 + 4]) for i in range(WIDTH * HEIGHT)])
         print("")
         print("--- host log ---")
