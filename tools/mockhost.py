@@ -51,7 +51,19 @@ STATE_END = 0x0103
 RES_CONTINUE = 0x0101
 RES_EXIT = 0x0103
 
+# Offscreen channel orders (mirrors sdk_official/TriglavPlugInDefine.h).
+# The product plug-in must convert RGBAlpha, and must leave GrayAlpha and
+# BinarizationGrayAlpha untouched. Those two early-return paths are only
+# reachable when the host reports those orders, so they need explicit tests:
+# a wrong branch there would write to a user's layer rather than crash loudly.
+ORDER_ALPHA = 0x01
+ORDER_GRAY_ALPHA = 0x02
 ORDER_RGBA = 0x03
+ORDER_CMYK_ALPHA = 0x04
+ORDER_BINARIZATION_ALPHA = 0x05
+ORDER_BINARIZATION_GRAY_ALPHA = 0x06
+ORDER_SELECT_AREA = 0x10
+ORDER_PLANE = 0x20
 
 MODULE_KIND_FILTER = 0x4380
 TARGET_KINDS_EXPECTED = [0x102, 0x101, 0x106]
@@ -129,7 +141,8 @@ def _store(text):
     return handle
 
 
-def build(pixels, alpha, log, prop_state, minimal=False, hostile=False):
+def build(pixels, alpha, log, prop_state, minimal=False, hostile=False,
+          channel_order=ORDER_RGBA):
     """Create the service suite and record suite for one run. Returns (suite, keep).
 
     minimal=True strips every OPTIONAL host callback, leaving only the bare
@@ -180,7 +193,7 @@ def build(pixels, alpha, log, prop_state, minimal=False, hostile=False):
 
     @mk(ctypes.POINTER(Int), Ptr)
     def get_channel_order(pv, obj):
-        pv[0] = ORDER_RGBA
+        pv[0] = channel_order
         return API_OK
 
     @mk(ctypes.POINTER(Int), ctypes.POINTER(Int), ctypes.POINTER(Int), Ptr)
@@ -478,6 +491,9 @@ def main():
                         help="the artefact must NOT modify pixels (used for the diagnostic probe)")
     parser.add_argument("--hostile", action="store_true",
                         help="remove required host procs; the artefact must fail cleanly, not crash")
+    parser.add_argument("--channel-order", type=lambda v: int(v, 0), default=ORDER_RGBA,
+                        help="offscreen channel order the host reports, e.g. 0x03 (RGB, default), "
+                             "0x02 (gray), 0x06 (binarized gray), 0x04 (CMYK)")
     args = parser.parse_args()
 
     if not os.path.isfile(args.plugin):
@@ -497,7 +513,8 @@ def main():
     log = []
     prop_state = {}
     svc, rec, keep = build(pixels, alpha, log, prop_state,
-                           minimal=args.minimal, hostile=args.hostile)
+                           minimal=args.minimal, hostile=args.hostile,
+                           channel_order=args.channel_order)
 
     server = Server()
     ctypes.memmove(ctypes.byref(server, Server.record.offset), rec, ctypes.sizeof(rec))
@@ -563,19 +580,35 @@ def main():
 
     problems = []
 
-    if args.expect_untouched:
-        # Diagnostic probe mode: the artefact is a measurement instrument and
-        # must leave every byte alone.
+    # Some channel orders must be left completely alone:
+    #   * the diagnostic probe is a measurement instrument
+    #   * GrayAlpha / BinarizationGrayAlpha have nothing to convert
+    #   * CMYKAlpha is not a supported conversion path for this plug-in
+    # A wrong branch here would silently write to a user's layer, which is far
+    # worse than a loud crash, so it gets an explicit assertion.
+    must_be_untouched = (
+        args.expect_untouched
+        or args.channel_order in (ORDER_ALPHA,
+                                  ORDER_GRAY_ALPHA,
+                                  ORDER_BINARIZATION_ALPHA,
+                                  ORDER_BINARIZATION_GRAY_ALPHA,
+                                  ORDER_CMYK_ALPHA)
+    )
+
+    if must_be_untouched:
         original = bytearray()
         for r, g, b, a in SOURCE:
             original += bytes((r, g, b, a))
         if after != bytes(original):
-            problems.append("artefact modified pixels but must not: got %s"
-                            % list(after[:12]))
+            problems.append("pixels were modified but must not be "
+                            "(channelOrder=0x%02X): got %s"
+                            % (args.channel_order, list(after[:12])))
         if alpha_before != alpha_after:
-            problems.append("artefact modified alpha but must not")
+            problems.append("alpha was modified but must not be "
+                            "(channelOrder=0x%02X)" % args.channel_order)
         if not args.quiet:
             print("")
+            print("channelOrder  : 0x%02X" % args.channel_order)
             print("before:", [tuple(SOURCE[i]) for i in range(WIDTH * HEIGHT)])
             print("after :", [tuple(after[i * 4:i * 4 + 4]) for i in range(WIDTH * HEIGHT)])
             print("")

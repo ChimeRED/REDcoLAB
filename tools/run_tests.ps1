@@ -119,6 +119,31 @@ if (Test-Path -LiteralPath $probeTarget) {
     Write-Host ""
 }
 
+# Offscreen channel orders. The product plug-in must convert RGBAlpha and must
+# leave every other order untouched. These early-return paths are only reachable
+# when the host reports that order, so they need deliberate coverage: a wrong
+# branch here would silently rewrite a user's layer.
+$channelOrders = @(
+    @{ Code = 0x01; Name = 'Alpha-only' },
+    @{ Code = 0x02; Name = 'GrayAlpha' },
+    @{ Code = 0x03; Name = 'RGBAlpha (normal conversion)' },
+    @{ Code = 0x04; Name = 'CMYKAlpha' },
+    @{ Code = 0x05; Name = 'BinarizationAlpha' },
+    @{ Code = 0x06; Name = 'BinarizationGrayAlpha' }
+)
+$channelTarget = Join-Path $distDir 'REDcoLAB.cpm'
+if (Test-Path -LiteralPath $channelTarget) {
+    Write-Host "--- offscreen channel order coverage ---"
+    foreach ($co in $channelOrders) {
+        & $Python $mockHost $channelTarget --channel-order $co.Code --quiet
+        if ($LASTEXITCODE -ne 0) {
+            Fail ("channel order 0x{0:X2} ({1}) behaved wrongly" -f $co.Code, $co.Name)
+        }
+        Write-Host ("  0x{0:X2}  {1,-30} PASS" -f $co.Code, $co.Name) -ForegroundColor Green
+    }
+    Write-Host ""
+}
+
 # Hostile host contract: required procs removed. Reaching "no crash" is the
 # requirement; refusing registration is the expected outcome for the product.
 foreach ($artefact in $existing) {

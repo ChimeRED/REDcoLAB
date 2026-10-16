@@ -1,5 +1,47 @@
 # REDcoLAB 变更记录
 
+## 1.0.0 修正 6：通道排列覆盖 —— 修掉一个未显式处理的分支（2026-10-16）
+
+### 发现的缺陷
+
+真实 CSP 可能以多种**通道排列**把图层交给滤镜。此前只有 `RGBAlpha` 路径被真正执行过，
+其余分支从未被测——而**这类分支写错不会崩溃，只会静默写坏用户的图层**，比崩溃更危险。
+
+新增 `tools/mockhost.py --channel-order` 后逐一测试，发现：
+
+| 通道排列 | 修正前 | 问题 |
+|---|---|---|
+| `0x05` `BinarizationAlpha`（二值化单通道图层） | 落进默认分支 | **未显式识别为「无需转换」**，只是因未注册 `getRGBChannelIndexProc` 才侥幸没写像素 |
+
+### 修复
+
+`src/REDcoLAB.cpp` 的通道排列分派改为四个显式分支：
+
+- `GrayAlpha` → 已是灰度，直接返回
+- `BinarizationGrayAlpha` **与** `BinarizationAlpha` → 二值图层，直接返回
+- `Alpha`（新增显式分支）→ 无颜色通道，直接返回
+- 其余（CMYK / plane 等）→ 记日志后返回，不改动画布
+
+### 新增测试
+
+`tools/run_tests.ps1` 增加**通道排列覆盖**环节，逐一验证 6 种排列：
+
+```
+0x01 Alpha-only                     PASS   （必须不改动）
+0x02 GrayAlpha                      PASS   （必须不改动）
+0x03 RGBAlpha (normal conversion)   PASS   （必须真的转成灰度）
+0x04 CMYKAlpha                      PASS   （必须不改动）
+0x05 BinarizationAlpha              PASS   （必须不改动）
+0x06 BinarizationGrayAlpha          PASS   （必须不改动）
+```
+
+`0x03` 单独断言**确实发生转换**，防止把「该转换的」误判成「无需处理」。
+
+### 测试闭环现状
+
+共 **16 项**，全部通过：产品四组合（cpm/dll × 正常/最小宿主）、算法矩阵、
+探针两组合、**6 种通道排列**、残缺宿主两产物。
+
 ## 1.0.0 修正 5：真机加载成功 —— 撤回此前的错误否定结论（2026-10-16）
 
 ### 结果

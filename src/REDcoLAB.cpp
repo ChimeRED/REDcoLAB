@@ -639,14 +639,25 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
             *result = kTriglavPlugInCallResultSuccess;
             return;
         }
-        else if (channelOrder == kTriglavPlugInOffscreenChannelOrderBinarizationGrayAlpha) {
+        else if (channelOrder == kTriglavPlugInOffscreenChannelOrderBinarizationGrayAlpha ||
+                 channelOrder == kTriglavPlugInOffscreenChannelOrderBinarizationAlpha) {
+            /* binarized layer (black/white only). There is no grey ramp to move
+             * it to, and the plug-in does not register getRGBChannelIndexProc
+             * for these orders. Return without touching anything. */
             REDCOLAB_LOG("[run] source is binarized (channelOrder=0x%X), nothing to do\n",
                          (int)channelOrder);
             *result = kTriglavPlugInCallResultSuccess;
             return;
         }
+        else if (channelOrder == kTriglavPlugInOffscreenChannelOrderAlpha) {
+            /* alpha-only layer: no colour channels exist at all */
+            REDCOLAB_LOG("[run] source is alpha-only (channelOrder=0x%X), nothing to do\n",
+                         (int)channelOrder);
+            *result = kTriglavPlugInCallResultSuccess;
+            return;
+        }
         else {
-            /* CMYK, alpha-only, plane order, ... : report honestly and change nothing */
+            /* CMYK, plane order, ... : report honestly and change nothing */
             REDCOLAB_LOG("[run] UNSUPPORTED channelOrder=0x%X, leaving the layer untouched\n",
                          (int)channelOrder);
             *result = kTriglavPlugInCallResultSuccess;
