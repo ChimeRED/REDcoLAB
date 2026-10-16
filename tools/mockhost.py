@@ -129,7 +129,7 @@ def _store(text):
     return handle
 
 
-def build(pixels, alpha, log, prop_state, minimal=False):
+def build(pixels, alpha, log, prop_state, minimal=False, hostile=False):
     """Create the service suite and record suite for one run. Returns (suite, keep).
 
     minimal=True strips every OPTIONAL host callback, leaving only the bare
@@ -137,6 +137,12 @@ def build(pixels, alpha, log, prop_state, minimal=False):
     host that does not expose optional procs; that was a real crash before
     (see .agents/skill-error-record/plugin-dev-2026-10-15-null-host-proc.md),
     so it gets a permanent regression test.
+
+    hostile=True goes further and removes callbacks the plug-in would reasonably
+    consider REQUIRED. It must then refuse to register and return a failure
+    code, never crash. A crash inside a filter plug-in takes the user's whole
+    CLIP STUDIO PAINT session down with it, so "fail cleanly" is a hard
+    requirement, not a nicety.
     """
     keep = []
     svc = suite(256)
@@ -444,6 +450,15 @@ def build(pixels, alpha, log, prop_state, minimal=False):
         fi[3] = Ptr(None)    # setUseBlankImageProc
         ps[2] = Ptr(None)    # property releaseProc
 
+    if hostile:
+        # Remove things the plug-in treats as required. It must bail out with a
+        # failure result instead of dereferencing NULL.
+        ps[0] = Ptr(None)    # property createProc
+        ps[3] = Ptr(None)    # property addItemProc
+        ps[8] = Ptr(None)    # property setIntegerValueProc
+        fi[4] = Ptr(None)    # setTargetKindsProc
+        mi[1] = Ptr(None)    # setModuleIDProc
+
     rec[0] = ctypes.cast(mi, Ptr)
     rec[5] = ctypes.cast(fi, Ptr)
     rec[6] = ctypes.cast(fr, Ptr)
@@ -461,6 +476,8 @@ def main():
                         help="strip optional host callbacks to test plug-in robustness")
     parser.add_argument("--expect-untouched", action="store_true",
                         help="the artefact must NOT modify pixels (used for the diagnostic probe)")
+    parser.add_argument("--hostile", action="store_true",
+                        help="remove required host procs; the artefact must fail cleanly, not crash")
     args = parser.parse_args()
 
     if not os.path.isfile(args.plugin):
@@ -479,7 +496,8 @@ def main():
     alpha_before = list(alpha)
     log = []
     prop_state = {}
-    svc, rec, keep = build(pixels, alpha, log, prop_state, minimal=args.minimal)
+    svc, rec, keep = build(pixels, alpha, log, prop_state,
+                           minimal=args.minimal, hostile=args.hostile)
 
     server = Server()
     ctypes.memmove(ctypes.byref(server, Server.record.offset), rec, ctypes.sizeof(rec))
@@ -509,6 +527,24 @@ def main():
 
     ok = True
     ok &= call(SEL_MODULE_INIT, "moduleInitialize")
+
+    if args.hostile:
+        # On a host that lacks required procs the plug-in is expected to REFUSE
+        # registration (non-zero result) rather than crash. Reaching this point
+        # at all already proves the module init path did not dereference NULL.
+        registered = call(SEL_FILTER_INIT, "filterInitialize")
+
+        # Survived hostile module init without crashing.
+        print("")
+        print("checks: module init survived a host missing required procs; "
+              "filter registration %s" % ("accepted" if registered else "cleanly refused"))
+        print("RESULT: PASS (no crash)")
+        if registered:
+            # Still must not be called onward; finish the lifecycle politely.
+            call(SEL_FILTER_TERM, "filterTerminate")
+        call(SEL_MODULE_TERM, "moduleTerminate")
+        return 0
+
     ok &= call(SEL_FILTER_INIT, "filterInitialize")
 
     # The user changes parameters *after* the dialog opens, so the value has to

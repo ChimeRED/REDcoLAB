@@ -119,6 +119,19 @@ if (Test-Path -LiteralPath $probeTarget) {
     Write-Host ""
 }
 
+# Hostile host contract: required procs removed. Reaching "no crash" is the
+# requirement; refusing registration is the expected outcome for the product.
+foreach ($artefact in $existing) {
+    $label = Split-Path -Leaf $artefact
+    Write-Host "--- hostile host contract (missing required procs): $label ---"
+    & $Python $mockHost $artefact --hostile --quiet
+    if ($LASTEXITCODE -ne 0) {
+        Fail "$label crashed or misbehaved on a host missing required procs"
+    }
+    Write-Host "  -> PASS (failed cleanly, no crash)" -ForegroundColor Green
+    Write-Host ""
+}
+
 Write-Host "All mock-host tests PASS."
 Write-Host ""
 Write-Host "REMINDER: this does not prove CSP loads the plug-in."

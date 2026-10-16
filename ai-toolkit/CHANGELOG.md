@@ -1,5 +1,31 @@
 # REDcoLAB 变更记录
 
+## 1.0.0 修正 3：残缺宿主契约测试（2026-10-15）
+
+插件崩溃会连带**整个 CSP 会话**一起挂掉，所以「干净失败」是硬要求而不是加分项。
+此前只验证了「**可选**回调缺失」，没有验证「**必需**回调缺失」。本轮补齐。
+
+### 新增
+
+- `tools/mockhost.py --hostile`：残缺宿主模式，移除插件视为**必需**的回调：
+  `propertyService.createProc`、`addItemProc`、`setIntegerValueProc`、
+  `filterInitializeRecord.setTargetKindsProc`、`moduleInitializeRecord.setModuleIDProc`。
+- `tools/run_tests.ps1` 增加残缺宿主环节（每个产品产物各一次）。
+
+### 测试结果
+
+| 产物 | 残缺宿主下的行为 | 判定 |
+|---|---|---|
+| `REDcoLAB.cpm` | 模块初始化存活；**滤镜注册干净拒绝**（返回失败码 -1） | **PASS（无崩溃）** |
+| `REDcoLAB.dll` | 同上 | **PASS（无崩溃）** |
+| `REDcoLAB_probe.dll` | 不注册参数项，因此继续完成注册 | **PASS（无崩溃）** |
+
+探针另增一条记录：`property service usable for the product build: yes/no` ——
+真实 CSP 上若该服务不可用，产品版会拒绝注册，这条日志能直接说明原因。
+
+至此测试闭环共 **10 项**，全部通过：产品四组合（cpm/dll × 正常/最小宿主）、
+算法矩阵、探针两组合、残缺宿主两产物。
+
 ## 1.0.0 修正 2：真机验证探针（2026-10-15）
 
 真机加载验证一直没做成，核心障碍是**无法区分两种日志**：

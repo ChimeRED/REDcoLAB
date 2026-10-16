@@ -284,7 +284,21 @@ TRIGLAV_PLUGIN_DLL_EXTERN void TRIGLAV_PLUGIN_CALLBACK TriglavPluginCall(
         }
 
         /* No property items on purpose: the probe must be trivially simple so
-         * that a failure cannot be blamed on parameter registration. */
+         * that a failure cannot be blamed on parameter registration. Record
+         * whether a usable property service exists anyway - it is useful
+         * evidence for the real product, which does need it. */
+        {
+            TriglavPlugInPropertyService* ps = pluginServer->serviceSuite.propertyService;
+            bool usable = (ps != NULL) && (ps->createProc != NULL) &&
+                          (ps->addItemProc != NULL) &&
+                          (ps->setIntegerValueProc != NULL) &&
+                          (ps->setIntegerDefaultValueProc != NULL) &&
+                          (ps->setIntegerMinValueProc != NULL) &&
+                          (ps->setIntegerMaxValueProc != NULL);
+            PROBE("  property service usable for the product build: %s\n",
+                  usable ? "yes" : "NO - the product build would refuse to register");
+        }
+
         *result = kTriglavPlugInCallResultSuccess;
         PROBE("PROBE filterInitialize done\n");
         return;
