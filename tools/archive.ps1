@@ -43,6 +43,23 @@ if (-not (Test-Path -LiteralPath $git)) {
     if ($onPath) { $git = $onPath.Source } else { Fail "git not found" }
 }
 
+# ---- environment quirks learned the hard way (see docs/推送环境说明.md) ----
+# 1. schannel cannot acquire credentials in this environment, so every git
+#    invocation must use the OpenSSL backend, which brings its own CA bundle.
+$gitCommon = @('-c', 'http.sslBackend=openssl')
+# 2. The portable git ships no credential manager, so `git push` cannot ask for
+#    a password. gh already holds a logged-in token; use it for this one push
+#    instead of writing credentials anywhere.
+$env:PATH = "$(Join-Path $env:LOCALAPPDATA 'redkolab-tools\git\cmd');" +
+            "$(Join-Path $env:LOCALAPPDATA 'redkolab-tools\git\bin');" + $env:PATH
+
+function Get-PushUrl {
+    if (-not (Test-Path -LiteralPath $gh)) { return $null }
+    $token = (& $gh auth token 2>&1 | Out-String).Trim()
+    if (-not $token -or $token.Length -lt 20) { return $null }
+    return "https://x-access-token:$token@github.com/ChimeRED/REDcoLAB.git"
+}
+
 Step "preflight"
 $version = (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { Fail "bad VERSION: '$version'" }
@@ -190,17 +207,47 @@ if (-not $Push) {
 }
 
 Step "push (user-confirmed)"
-& $git -C $projectRoot push origin main
-if ($LASTEXITCODE -ne 0) { Fail "git push main failed" }
+$pushUrl = Get-PushUrl
+if (-not $pushUrl) {
+    Fail @"
+no push credentials available.
 
-& $git -C $projectRoot push origin $tag
+The portable git has no credential manager and schannel is unusable here, so
+pushing needs the gh token. Log in first:
+
+  gh auth login
+
+Nothing was pushed; the commit and tag exist locally only.
+"@
+}
+
+& $git -C $projectRoot @gitCommon push $pushUrl main:main
+if ($LASTEXITCODE -ne 0) { Fail "git push main failed" }
+Write-Host "main          : pushed"
+
+& $git -C $projectRoot @gitCommon push $pushUrl $tag
 if ($LASTEXITCODE -ne 0) { Fail "git push tag failed" }
+Write-Host "tag           : pushed"
 
 Step "GitHub Release"
 if (Test-Path -LiteralPath $gh) {
-    & $gh release create $tag $zipPath --title "REDcoLAB $version" --notes "See CHANGELOG.md. Build artefacts: REDcoLAB.cpm, REDcoLAB.dll."
-    if ($LASTEXITCODE -ne 0) { Write-Host "gh release failed (tag is already pushed, release can be added later)" -ForegroundColor Yellow }
-    else { Write-Host "release       : created" -ForegroundColor Green }
+    # gh resolves the repository from the working directory's git remote, so it
+    # must run inside the project directory, and it needs git on PATH.
+    Push-Location $projectRoot
+    try {
+        & $gh release create $tag --title "REDcoLAB $version" `
+            --notes-file (Join-Path $projectRoot 'docs\发布说明.md') `
+            (Join-Path $distDir 'REDcoLAB.cpm') `
+            (Join-Path $distDir 'REDcoLAB.dll') `
+            $zipPath
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "gh release failed (tag is already pushed, release can be added later)" -ForegroundColor Yellow
+        }
+        else {
+            Write-Host "release       : created" -ForegroundColor Green
+        }
+    }
+    finally { Pop-Location }
 }
 else {
     Write-Host "gh not found; tag was pushed but no Release was created" -ForegroundColor Yellow
