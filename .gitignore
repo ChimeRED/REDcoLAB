@@ -1,0 +1,30 @@
+# CELSYS SDK headers and official sample sources.
+#
+# The Triglav Plug-In SDK is copyright CELSYS Inc. Its licence (clause 5 and 11)
+# keeps the copyright in the header files and requires confidentiality, and
+# clause 8(6) restricts how plug-ins may be handed to others. These files are
+# therefore NEVER committed, NEVER packaged and NEVER published.
+#
+# Obtain them yourself from the official page:
+#   https://www.clipstudio.net/ja/dl/cspsdk_term/
+# then copy the TriglavPlugIn*.h files into sdk_official/.
+#
+# Do NOT restore this from a third-party mirror or another GitHub repository.
+sdk_official/
+reference/
+
+# Build products are regenerated from src/, never committed.
+dist/
+
+# Frozen archive of the superseded implementation, kept for traceability only.
+# It is large-ish, contains the old (rejected) screen-capture approach and the
+# old SDK headers, so it stays local.
+_baseline/
+
+# Local scratch
+*.o
+*.obj
+*.log
+__pycache__/
+*.pyc
+.vscode/
